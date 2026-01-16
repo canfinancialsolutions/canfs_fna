@@ -2,7 +2,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverExternalPackages: ['pdfkit'],
+    // ✅ Correct for Next.js 14/15
+    serverComponentsExternalPackages: ['pdfkit'],
   },
 };
 
