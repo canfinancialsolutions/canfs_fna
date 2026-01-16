@@ -6,4 +6,4 @@ const nextConfig = {
   // experimental: { serverComponentsExternalPackages: ['pdfkit'] }
 };
 
-module.exports = nextConfig;
+// module.exports = nextConfig;
