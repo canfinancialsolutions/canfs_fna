@@ -1,10 +1,8 @@
 
-// app/api/fna/[id]/pdf/route.ts
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
 
 export async function GET(
   req: Request,
@@ -26,7 +24,6 @@ export async function GET(
   });
 
   const pdf = Buffer.concat(chunks);
-
   return new NextResponse(pdf, {
     status: 200,
     headers: {
