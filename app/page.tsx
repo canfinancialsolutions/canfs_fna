@@ -1,156 +1,94 @@
 'use client';
 
-// app/api/fna/[id]/pdf/route.ts
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
-import { NextResponse } from 'next/server';
-
-export async function GET() {
-  const { default: PDFDocument } = await import('pdfkit');
-  // ... generate pdf ...
-  return new NextResponse(/* buffer */, {
-    headers: { 'Content-Type': 'application/pdf' },
-  });
-}
-
-
-// app/page.tsx
-export default function HomePage() {
-  return (
-    <main style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif' }}>
-      <h1>Welcome to HGI App</h1>
-      <p>This is a clean starter page. Build should pass now.</p>
-    </main>
-  );
-}
-
-
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 
-export default function Home() {
-  const [income, setIncome] = useState('');
-  const [debt, setDebt] = useState('');
-  const [savings, setSavings] = useState('');
-  const [dependents, setDependents] = useState('');
-  const [years, setYears] = useState('10');
-  const [result, setResult] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
+type FnaRow = {
+  id: string;
+  created_at: string;
+  household_income: number;
+  dependents: number;
+};
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+export default function Dashboard() {
+  const router = useRouter();
+  const [fnaList, setFnaList] = useState<FnaRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
 
-    const incomeNum = Number(income) || 0;
-    const debtNum = Number(debt) || 0;
-    const savingsNum = Number(savings) || 0;
-    const dependentsNum = Number(dependents) || 0;
-    const yearsNum = Number(years) || 10;
+  useEffect(() => {
+    let cancelled = false;
 
-    // Simple HGI-style logic: years of income + debts - savings
-    const recommended =
-      incomeNum * yearsNum + debtNum - savingsNum + dependentsNum * 50000;
+    const load = async () => {
+      try {
+        const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+        if (sessionErr) throw sessionErr;
 
-    // Save to Supabase (anonymous for now)
-    const { data, error } = await supabase
-      .from('fna_sessions')
-      .insert({
-        household_income: incomeNum,
-        debt_total: debtNum,
-        savings_total: savingsNum,
-        dependents: dependentsNum,
-        goal_years_of_income: yearsNum,
-      })
-      .select()
-      .single();
+        if (!session) {
+          router.replace('/auth');
+          return;
+        }
 
-    if (!error && data) {
-      await supabase.from('fna_recommendations').insert({
-        fna_id: data.id,
-        recommended_coverage: recommended,
-        notes: 'Auto-calculated based on income, debt, savings, dependents.',
-      });
-    }
+        const { data, error } = await supabase
+          .from('fna_sessions')
+          .select('id, created_at, household_income, dependents')
+          .order('created_at', { ascending: false });
 
-    setResult(recommended);
-    setLoading(false);
-  };
+        if (error) throw error;
+
+        if (!cancelled) setFnaList((data ?? []) as FnaRow[]);
+      } catch (e: any) {
+        if (!cancelled) setErrMsg(e?.message ?? 'Unexpected error');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  if (loading) return <p>Loading…</p>;
+
+  if (errMsg) {
+    return (
+      <main className="min-h-screen p-6 bg-slate-100">
+        <h1 className="text-2xl font-bold mb-2">Agent Dashboard</h1>
+        <p className="text-red-600">Error: {errMsg}</p>
+      </main>
+    );
+  }
 
   return (
-    <main className="min-h-screen flex items-center justify-center bg-slate-100">
-      <div className="w-full max-w-xl bg-white shadow p-6 rounded">
-        <h1 className="text-2xl font-bold mb-4">
-          HGI‑Style Financial Needs Analysis
-        </h1>
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="block text-sm font-medium">Annual Household Income ($)</label>
-            <input
-              type="number"
-              value={income}
-              onChange={e => setIncome(e.target.value)}
-              className="mt-1 w-full border rounded px-2 py-1"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Total Debt ($)</label>
-            <input
-              type="number"
-              value={debt}
-              onChange={e => setDebt(e.target.value)}
-              className="mt-1 w-full border rounded px-2 py-1"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Total Savings ($)</label>
-            <input
-              type="number"
-              value={savings}
-              onChange={e => setSavings(e.target.value)}
-              className="mt-1 w-full border rounded px-2 py-1"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Number of Dependents</label>
-            <input
-              type="number"
-              value={dependents}
-              onChange={e => setDependents(e.target.value)}
-              className="mt-1 w-full border rounded px-2 py-1"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Years of Income to Protect</label>
-            <input
-              type="number"
-              value={years}
-              onChange={e => setYears(e.target.value)}
-              className="mt-1 w-full border rounded px-2 py-1"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-indigo-600 text-white py-2 rounded font-semibold"
-          >
-            {loading ? 'Calculating…' : 'Run FNA'}
-          </button>
-        </form>
-
-        {result !== null && (
-          <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded">
-            <h2 className="font-semibold mb-1">Recommended Life Insurance Coverage</h2>
-            <p className="text-lg font-bold">
-              ${result.toLocaleString()}
-            </p>
-            <p className="text-sm text-slate-600 mt-2">
-              This is a simplified estimate. Refine with product options, riders, and your agent’s advice.
-            </p>
-          </div>
-        )}
-      </div>
+    <main className="min-h-screen p-6 bg-slate-100">
+      <h1 className="text-2xl font-bold mb-4">Agent Dashboard</h1>
+      <table className="w-full bg-white shadow rounded">
+        <thead>
+          <tr className="border-b">
+            <th className="text-left p-2">Date</th>
+            <th className="text-left p-2">Income</th>
+            <th className="text-left p-2">Dependents</th>
+            <th className="text-left p-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {fnaList.map((row) => (
+            <tr key={row.id} className="border-b">
+              <td className="p-2">{new Date(row.created_at).toLocaleString()}</td>
+              <td className="p-2">${row.household_income.toLocaleString()}</td>
+              <td className="p-2">{row.dependents}</td>
+              <td className="p-2">
+                <a href={`/dashboard/${row.id}`} className="text-indigo-600 underline text-sm">
+                  View / PDF
+                </a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </main>
   );
 }
