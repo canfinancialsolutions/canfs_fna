@@ -1,4 +1,9 @@
 {
+  {
+  "engines": {
+    "node": "20.x"
+  }
+},
   "dependencies": {
     "@supabase/supabase-js": "^2.x.x"
   }
